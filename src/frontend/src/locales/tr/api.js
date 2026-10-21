@@ -191,6 +191,7 @@ export default {
     calendar_calendars: 'Takvimler',
     files_spaces: 'Dosya alanları',
     sms_devices: 'SMS telefonları',
+    sms_sims: "SMS SIM kartları",
     crm_pipelines: 'CRM satış hatları',
   },
   rules: {

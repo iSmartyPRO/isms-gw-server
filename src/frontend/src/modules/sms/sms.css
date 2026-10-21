@@ -1,5 +1,6 @@
 /* SMS gateway (modules/sms). Prefix .sx-*; colours from theme tokens (--da-*). */
 
+:root,
 .sx-shell {
   --sx-sent: #4c6ef5;
   --sx-delivered: #2f9e44;
@@ -2205,4 +2206,75 @@ textarea.sx-mono {
   .sx-status__dot {
     animation: none !important;
   }
+}
+
+/* ── Phone API tokens (components/PhoneTokens.jsx) ── */
+.sx-tokens {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--da-hairline);
+  border-radius: 18px;
+  background: var(--da-surface);
+  overflow: hidden;
+}
+.sx-token {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+}
+.sx-token + .sx-token {
+  border-top: 1px solid var(--da-hairline);
+}
+.sx-token.is-revoked,
+.sx-token.is-expired {
+  opacity: 0.6;
+}
+.sx-token__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sx-token__main .sx-muted {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sx-guide {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.sx-guide__facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  gap: 10px;
+}
+.sx-guide__facts > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--da-tint);
+  min-width: 0;
+}
+.sx-guide__facts span {
+  font-size: 12px;
+  color: var(--da-muted);
+}
+.sx-guide__facts code {
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
+.sx-dialog-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.sx-dialog-footer__grow {
+  flex: 1;
 }

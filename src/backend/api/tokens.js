@@ -184,11 +184,13 @@ async function cleanInput(input, current, { config }) {
  * Creates a token. `actor` = { id, permissions }. People without `api.admin`
  * create tokens only for themselves. Returns { token (shape), secret }.
  */
-export async function createToken(actor, input = {}) {
+export async function createToken(actor, input = {}, { resourceToken = false } = {}) {
   const config = await apiConfig();
   const admin = hasPermission(actor.permissions, 'api.admin');
   const userId = admin && input.userId ? Number(input.userId) : actor.id;
-  if (!admin && !config.personalTokens) throw httpError(403, 'Personal tokens are turned off', 'PERSONAL_TOKENS_OFF');
+  // A module may hand out tokens narrowed to one of its resources (an SMS phone) to the
+  // people who manage it, even when personal tokens are off; they act as their creator.
+  if (!admin && !config.personalTokens && !resourceToken) throw httpError(403, 'Personal tokens are turned off', 'PERSONAL_TOKENS_OFF');
   const { rows: users } = await query(`SELECT id, is_active FROM users WHERE id = $1`, [userId]);
   if (!users[0]) throw httpError(400, 'Unknown user', 'USER_UNKNOWN');
   await assertMayActFor(actor, userId);
@@ -250,6 +252,19 @@ export async function rotateToken(actor, id) {
   await query(`UPDATE api_tokens SET prefix = $2, secret_hash = $3, updated_at = NOW() WHERE id = $1`, [row.id, secret.prefix, secret.hash]);
   forget(row.prefix);
   return { token: await getToken(row.id), secret: secret.token };
+}
+
+/**
+ * Revokes a token on behalf of whoever manages the resource it is narrowed to
+ * (an SMS phone's managers): the caller checked that right itself.
+ */
+export async function revokeResourceToken(id, actorId) {
+  const { rows } = await query(
+    `UPDATE api_tokens SET revoked_at = COALESCE(revoked_at, NOW()), revoked_by = $2, updated_at = NOW() WHERE id = $1 RETURNING prefix`,
+    [Number(id), actorId]
+  );
+  if (rows[0]) forget(rows[0].prefix);
+  return Boolean(rows[0]);
 }
 
 export async function deleteToken(actor, id) {

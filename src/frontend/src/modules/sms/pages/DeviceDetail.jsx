@@ -11,8 +11,9 @@ import { deviceUrl, smsApi, SIM_COLORS } from '../api';
 import { useSms } from '../SmsContext';
 import { ConnectGuide } from '../components/AddDeviceWizard';
 import { Ago, Kpi, OnlineDot, SimCard, TrafficChart } from '../components/ui';
+import PhoneTokens from '../components/PhoneTokens';
 
-function SimDialog({ sim, onClose }) {
+function SimDialog({ sim, onClose, onToken }) {
   const { t } = useLocale();
   const { message } = App.useApp();
   const [form] = Form.useForm();
@@ -38,7 +39,26 @@ function SimDialog({ sim, onClose }) {
     }
   };
   return (
-    <Modal open={Boolean(sim)} title={t('sms.sim.settings')} onCancel={() => onClose(false)} onOk={save} confirmLoading={saving} okText={t('sms.save')} cancelText={t('sms.cancel')} destroyOnClose>
+    <Modal
+      open={Boolean(sim)}
+      title={t('sms.sim.settings')}
+      onCancel={() => onClose(false)}
+      destroyOnClose
+      footer={
+        <div className="sx-dialog-footer">
+          {onToken && (
+            <Button icon={<KeyOutlined />} onClick={() => onToken(sim)}>
+              {t('sms.tokens.forSim')}
+            </Button>
+          )}
+          <span className="sx-dialog-footer__grow" />
+          <Button onClick={() => onClose(false)}>{t('sms.cancel')}</Button>
+          <Button type="primary" loading={saving} onClick={save}>
+            {t('sms.save')}
+          </Button>
+        </div>
+      }
+    >
       {sim && (
         <div className="sx-sim-dialog">
           <SimCard sim={{ ...sim, color, label: label || sim.label }} />
@@ -161,7 +181,7 @@ export default function DeviceDetail() {
   const { t, locale } = useLocale();
   const { message, modal } = App.useApp();
   const navigate = useNavigate();
-  const { refresh: refreshAll } = useSms();
+  const { refresh: refreshAll, config } = useSms();
   const [device, setDevice] = useState(null);
   const [stats, setStats] = useState(null);
   const [error, setError] = useState(null);
@@ -169,6 +189,7 @@ export default function DeviceDetail() {
   const [sharing, setSharing] = useState(false);
   const [newToken, setNewToken] = useState(null);
   const [tab, setTab] = useState('sims');
+  const [tokenSim, setTokenSim] = useState(null);
 
   const shown = useRef(null);
   const loadedId = useRef(null);
@@ -414,6 +435,12 @@ export default function DeviceDetail() {
               </div>
             ),
           },
+          manage &&
+            config?.canCreateTokens && {
+              key: 'api',
+              label: t('sms.device.tabs.api'),
+              children: <PhoneTokens device={device} presetSimId={tokenSim} onPresetUsed={() => setTokenSim(null)} />,
+            },
           {
             key: 'journal',
             label: t('sms.device.tabs.journal'),
@@ -437,6 +464,15 @@ export default function DeviceDetail() {
 
       <SimDialog
         sim={editing}
+        onToken={
+          config?.canCreateTokens
+            ? (sim) => {
+                setEditing(null);
+                setTokenSim(sim.id);
+                setTab('api');
+              }
+            : null
+        }
         onClose={(saved) => {
           setEditing(null);
           if (saved) load();

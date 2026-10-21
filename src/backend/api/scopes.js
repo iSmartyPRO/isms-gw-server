@@ -200,6 +200,8 @@ export const RESOURCE_KINDS = [
   { key: 'files.spaces', module: 'files', table: 'fs_space_acl' },
   // SMS: a token that sends or reads only through some phones.
   { key: 'sms.devices', module: 'sms', table: 'sms_device_acl' },
+  // …and only through some SIM cards of them (checked by modules/sms/service.js).
+  { key: 'sms.sims', module: 'sms', table: 'sms_sims', acl: false },
 ];
 
 export function cleanLimits(input) {

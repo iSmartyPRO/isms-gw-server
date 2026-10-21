@@ -177,6 +177,23 @@ export default function ApiPage() {
         </div>
       </section>
 
+      <section className="sx-card sx-quick-token">
+        <header className="sx-card__head">
+          <div>
+            <h2>{t('sms.api.quickTitle')}</h2>
+            <p>{t('sms.api.quickLead')}</p>
+          </div>
+        </header>
+        <ol className="sx-connect__steps">
+          <li>{t('sms.api.quickSteps.phone')}</li>
+          <li>{t('sms.api.quickSteps.sim')}</li>
+          <li>{t('sms.api.quickSteps.give')}</li>
+        </ol>
+        <Link to="/app/sms/devices">
+          <Button icon={<KeyOutlined />}>{t('sms.api.quickOpen')}</Button>
+        </Link>
+      </section>
+
       <section className="sx-card">
         <header className="sx-card__head">
           <div>

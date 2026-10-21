@@ -37,4 +37,6 @@ export default {
   hours: 'h',
   days: 'days',
   perMinute: 'per min',
+  phoneTokens: "Phone managers make API tokens",
+  phoneTokensDesc: "On a phone’s page people who manage it create tokens that only send and read through that phone (and a chosen SIM). Off — only through the API console.",
 };

@@ -126,7 +126,11 @@ curl -X POST https://sms.example.com/api/v1/app/sms/messages \
 | `GET` | `/devices` | Phones with SIM cards, online state and today’s counters |
 | `GET` | `/overview` | Today’s figures and a daily series |
 
-Base URL `https://<server>/api/v1/app/sms`. Create tokens in **Account → API tokens**, webhooks in
+**A token for one phone or SIM in a minute:** open the phone → **API** (or a SIM card → *API token for this SIM*),
+choose the SIM and expiry — you get a token that sends only through that SIM and a ready guide for developers with
+examples prefilled with the phone and SIM. It cannot change the phone, its settings or access.
+
+Base URL `https://<server>/api/v1/app/sms`. Fine-grained tokens are also made in **Account → API tokens**, webhooks in
 **Administration → API**. The full reference with examples in cURL, Python, Node.js and PHP is built in at `/developers`.
 
 ## Configuration

@@ -43,6 +43,11 @@ function SmsForm({ settings, save }) {
           </Form.Item>
         </SettingRow>
         {row('maxDevicesPerUser', 1, 500)}
+        <SettingRow label={t('smsSettings.phoneTokens')} description={t('smsSettings.phoneTokensDesc')}>
+          <Form.Item name="phoneTokens" valuePropName="checked" noStyle>
+            <Switch />
+          </Form.Item>
+        </SettingRow>
         {row('offlineAlertMinutes', 0, 1440, t('smsSettings.min'))}
       </SettingsSection>
 

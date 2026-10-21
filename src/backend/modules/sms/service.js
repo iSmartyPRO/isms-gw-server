@@ -92,6 +92,19 @@ async function portalDay() {
   return { zone, today: startOfDay(new Date(), zone) };
 }
 
+/**
+ * SIM cards an API token is narrowed to (resource limit `sms.sims`), or null.
+ * Such a token sends only through them and reads only their messages.
+ */
+export function simLimit(ctx) {
+  const set = ctx?.limits?.sms_sims;
+  return set ? [...set] : null;
+}
+const simAllowed = (ctx, simRowId) => {
+  const limit = simLimit(ctx);
+  return !limit || limit.includes(Number(simRowId));
+};
+
 // `today` is the placeholder of the start-of-day parameter.
 const deviceSelect = (today) => `
   SELECT d.*, COALESCE(u.display_name, u.username) AS owner_name,
@@ -101,7 +114,7 @@ const deviceSelect = (today) => `
     (SELECT COUNT(*) FROM sms_messages WHERE device_id = d.id AND status IN ('queued', 'scheduled', 'dispatched')) AS queued
   FROM sms_devices d LEFT JOIN users u ON u.id = d.owner_id`;
 
-async function simsOf(deviceIds) {
+async function simsOf(deviceIds, ctx = null) {
   if (!deviceIds.length) return new Map();
   const { rows } = await query(
     `SELECT s.*,
@@ -113,6 +126,7 @@ async function simsOf(deviceIds) {
   );
   const map = new Map();
   for (const row of rows) {
+    if (!simAllowed(ctx, row.id)) continue;
     if (!map.has(row.device_id)) map.set(row.device_id, []);
     map.get(row.device_id).push(simShape(row));
   }
@@ -138,7 +152,7 @@ export async function visibleDeviceIds(ctx, minLevel = LEVEL.view) {
 
 export async function listDevices(ctx) {
   const items = await visibleDevices(ctx);
-  const sims = await simsOf(items.map((item) => item.row.id));
+  const sims = await simsOf(items.map((item) => item.row.id), ctx);
   return items.map(({ row, level }) => deviceShape(row, level, sims.get(row.id) || []));
 }
 
@@ -159,7 +173,7 @@ async function loadDevice(ctx, id, needed = LEVEL.view) {
 
 export async function getDevice(ctx, id) {
   const { row, level } = await loadDevice(ctx, id);
-  const sims = await simsOf([row.id]);
+  const sims = await simsOf([row.id], ctx);
   return deviceShape(row, level, sims.get(row.id) || []);
 }
 
@@ -271,7 +285,7 @@ export async function setDeviceAccess(ctx, id, input = {}) {
 export async function updateSim(ctx, simRowId, input = {}) {
   const { rows } = await query(`SELECT * FROM sms_sims WHERE id = $1`, [Number(simRowId)]);
   const sim = rows[0];
-  if (!sim) throw httpError(404, 'SIM not found', 'NOT_FOUND');
+  if (!sim || !simAllowed(ctx, sim.id)) throw httpError(404, 'SIM not found', 'NOT_FOUND');
   await loadDevice(ctx, sim.device_id, LEVEL.manage);
   const fields = {};
   if (input.label !== undefined) fields.label = clean(input.label, 60) || null;
@@ -289,7 +303,7 @@ export async function updateSim(ctx, simRowId, input = {}) {
 export async function deleteSim(ctx, simRowId) {
   const { rows } = await query(`SELECT * FROM sms_sims WHERE id = $1`, [Number(simRowId)]);
   const sim = rows[0];
-  if (!sim) throw httpError(404, 'SIM not found', 'NOT_FOUND');
+  if (!sim || !simAllowed(ctx, sim.id)) throw httpError(404, 'SIM not found', 'NOT_FOUND');
   await loadDevice(ctx, sim.device_id, LEVEL.manage);
   if (sim.active) throw httpError(409, 'An active SIM cannot be removed: take it out of the phone first', 'SIM_ACTIVE');
   await query(`DELETE FROM sms_sims WHERE id = $1`, [sim.id]);
@@ -301,13 +315,13 @@ export async function deleteSim(ctx, simRowId) {
 async function candidates(ctx, { deviceId = null, simRowId = null } = {}) {
   const devices = (await visibleDevices(ctx, LEVEL.edit)).filter(({ row }) => !deviceId || row.id === deviceId);
   if (!devices.length) return [];
-  const sims = await simsOf(devices.map(({ row }) => row.id));
+  const sims = await simsOf(devices.map(({ row }) => row.id), ctx);
   const list = [];
   for (const { row } of devices) {
     const own = (sims.get(row.id) || []).filter((sim) => sim.active);
     if (!own.length) {
-      // A chosen SIM never goes through another phone.
-      if (simRowId) continue;
+      // A chosen SIM never goes through another phone; a token narrowed to SIM cards neither.
+      if (simRowId || simLimit(ctx)) continue;
       // Never connected yet: the phone picks the SIM itself (slot 0).
       list.push({ deviceId: row.id, simRowId: -row.id, slot: 0, online: isOnline(row.id), deviceEnabled: row.enabled, simActive: true, sendEnabled: true, sentToday: Number(row.sent_today || 0), dailyLimit: 0 });
       continue;
@@ -350,6 +364,7 @@ export async function sendMessages(ctx, input = {}, source = 'web') {
     const { rows } = await query(`SELECT device_id FROM sms_sims WHERE id = $1`, [simRowId]);
     // A SIM of a phone the caller cannot see does not exist for them.
     if (!rows[0] || (await levelOn(ACL, rows[0].device_id, ctx)) < LEVEL.view) throw httpError(404, 'SIM not found', 'SIM_NOT_FOUND');
+    if (!simAllowed(ctx, simRowId)) throw httpError(403, 'This API token may not send through this SIM', 'SIM_NOT_ALLOWED');
     if (deviceId && rows[0].device_id !== deviceId) throw httpError(400, 'The SIM belongs to another phone', 'SIM_DEVICE_MISMATCH');
   }
   if (deviceId) await loadDevice(ctx, deviceId, LEVEL.edit);
@@ -412,6 +427,7 @@ async function messageFilter(ctx, filters = {}) {
     args.push(value);
     where.push(sql.replace('?', `$${args.length}`));
   };
+  if (simLimit(ctx)) add('m.sim_row_id = ANY(?)', simLimit(ctx));
   if (['in', 'out'].includes(filters.direction)) add('m.direction = ?', filters.direction);
   if (filters.status) {
     const list = String(filters.status)
@@ -454,7 +470,7 @@ async function messageRow(ctx, idOrUuid, needed = LEVEL.view) {
   const key = String(idOrUuid);
   const { rows } = UUID.test(key) ? await query(`${MESSAGE_SELECT} WHERE m.uuid = $1`, [key]) : await query(`${MESSAGE_SELECT} WHERE m.id = $1`, [Number(key) || 0]);
   const row = rows[0];
-  if (!row) throw httpError(404, 'Message not found', 'NOT_FOUND');
+  if (!row || (simLimit(ctx) && !simAllowed(ctx, row.sim_row_id))) throw httpError(404, 'Message not found', 'NOT_FOUND');
   requireLevel(await levelOn(ACL, row.device_id, ctx), needed);
   return row;
 }
@@ -489,17 +505,19 @@ export async function retryMessage(ctx, id) {
 
 export async function markRead(ctx, { ids, deviceId, phone, all } = {}) {
   const visible = await visibleDeviceIds(ctx);
+  const sims = simLimit(ctx);
+  const simSql = (n) => ` AND ($${n}::int[] IS NULL OR sim_row_id = ANY($${n}::int[]))`;
   if (Array.isArray(ids) && ids.length) {
     const list = ids.map(Number).filter((id) => Number.isInteger(id)).slice(0, 1000);
-    const { rowCount } = await query(`UPDATE sms_messages SET is_read = TRUE WHERE id = ANY($1) AND device_id = ANY($2) AND NOT is_read`, [list, visible]);
+    const { rowCount } = await query(`UPDATE sms_messages SET is_read = TRUE WHERE id = ANY($1) AND device_id = ANY($2) AND NOT is_read${simSql(3)}`, [list, visible, sims]);
     return rowCount;
   }
   if (deviceId && phone) {
-    const { rowCount } = await query(`UPDATE sms_messages SET is_read = TRUE WHERE device_id = $1 AND phone = $2 AND device_id = ANY($3) AND NOT is_read`, [Number(deviceId), String(phone), visible]);
+    const { rowCount } = await query(`UPDATE sms_messages SET is_read = TRUE WHERE device_id = $1 AND phone = $2 AND device_id = ANY($3) AND NOT is_read${simSql(4)}`, [Number(deviceId), String(phone), visible, sims]);
     return rowCount;
   }
   if (all) {
-    const { rowCount } = await query(`UPDATE sms_messages SET is_read = TRUE WHERE device_id = ANY($1) AND NOT is_read`, [visible]);
+    const { rowCount } = await query(`UPDATE sms_messages SET is_read = TRUE WHERE device_id = ANY($1) AND NOT is_read${simSql(2)}`, [visible, sims]);
     return rowCount;
   }
   return 0;
@@ -512,6 +530,10 @@ export async function listThreads(ctx, { deviceId, q, limit, before } = {}) {
   const ids = await visibleDeviceIds(ctx);
   const args = [deviceId ? ids.filter((id) => id === Number(deviceId)) : ids];
   let extra = '';
+  if (simLimit(ctx)) {
+    args.push(simLimit(ctx));
+    extra += ` AND m.sim_row_id = ANY($${args.length})`;
+  }
   if (q) {
     args.push(`%${String(q).slice(0, 100).replace(/[%_\\]/g, (char) => `\\${char}`)}%`);
     extra += ` AND (m.phone ILIKE $${args.length} OR m.text ILIKE $${args.length})`;
@@ -544,6 +566,10 @@ export async function getThread(ctx, { deviceId, phone, before, limit } = {}) {
   const device = await loadDevice(ctx, deviceId, LEVEL.view);
   const args = [device.row.id, String(phone || '').slice(0, 40)];
   let beforeSql = '';
+  if (simLimit(ctx)) {
+    args.push(simLimit(ctx));
+    beforeSql += ` AND m.sim_row_id = ANY($${args.length})`;
+  }
   if (before) {
     args.push(Number(before) || 0);
     beforeSql = ` AND m.id < $${args.length}`;
@@ -563,6 +589,9 @@ export async function overview(ctx, { days = 14, deviceId = null } = {}) {
   const since = startOfDay(new Date(), zone, -(span - 1));
   let ids = await visibleDeviceIds(ctx);
   if (deviceId) ids = ids.filter((id) => id === Number(deviceId));
+  // A token narrowed to SIM cards counts only their messages ($n = the list, or NULL for all).
+  const sims = simLimit(ctx);
+  const simSql = (column, n) => ` AND ($${n}::int[] IS NULL OR ${column} = ANY($${n}::int[]))`;
   const { rows: [today] } = await query(
     `SELECT
        COUNT(*) FILTER (WHERE direction = 'out' AND status IN ('sent', 'delivered'))::int AS sent,
@@ -570,15 +599,15 @@ export async function overview(ctx, { days = 14, deviceId = null } = {}) {
        COUNT(*) FILTER (WHERE direction = 'out' AND status IN ('failed', 'expired'))::int AS failed,
        COUNT(*) FILTER (WHERE direction = 'in')::int AS received,
        COALESCE(SUM(parts) FILTER (WHERE direction = 'out' AND status IN ('sent', 'delivered')), 0)::int AS parts
-     FROM sms_messages WHERE device_id = ANY($1) AND created_at >= $2`,
-    [ids, dayStart]
+     FROM sms_messages WHERE device_id = ANY($1) AND created_at >= $2${simSql('sim_row_id', 3)}`,
+    [ids, dayStart, sims]
   );
   const { rows: [pending] } = await query(
     `SELECT COUNT(*) FILTER (WHERE status IN ('queued', 'dispatched', 'accepted'))::int AS queued,
             COUNT(*) FILTER (WHERE status = 'scheduled')::int AS scheduled,
             COUNT(*) FILTER (WHERE direction = 'in' AND NOT is_read)::int AS unread
-     FROM sms_messages WHERE device_id = ANY($1) AND (status IN ('queued', 'dispatched', 'accepted', 'scheduled') OR (direction = 'in' AND NOT is_read))`,
-    [ids]
+     FROM sms_messages WHERE device_id = ANY($1) AND (status IN ('queued', 'dispatched', 'accepted', 'scheduled') OR (direction = 'in' AND NOT is_read))${simSql('sim_row_id', 2)}`,
+    [ids, sims]
   );
   // Days of the portal's zone (DST safe): their starts are computed here, the database only counts.
   const starts = [];
@@ -590,17 +619,17 @@ export async function overview(ctx, { days = 14, deviceId = null } = {}) {
        COUNT(m.id) FILTER (WHERE m.direction = 'out' AND m.status IN ('failed', 'expired'))::int AS failed,
        COUNT(m.id) FILTER (WHERE m.direction = 'in')::int AS received
      FROM unnest($2::timestamptz[], $3::timestamptz[]) WITH ORDINALITY AS b(start, stop, n)
-     LEFT JOIN sms_messages m ON m.device_id = ANY($1) AND m.created_at >= b.start AND m.created_at < b.stop
+     LEFT JOIN sms_messages m ON m.device_id = ANY($1) AND m.created_at >= b.start AND m.created_at < b.stop${simSql('m.sim_row_id', 4)}
      GROUP BY b.n ORDER BY b.n`,
-    [ids, starts.slice(0, -1), starts.slice(1)]
+    [ids, starts.slice(0, -1), starts.slice(1), sims]
   );
   const series = counted.map((row, index) => ({ day: isoDay(starts[index], zone), sent: row.sent, delivered: row.delivered, failed: row.failed, received: row.received }));
   const { rows: [totals] } = await query(
     `SELECT COUNT(*) FILTER (WHERE direction = 'out')::int AS out, COUNT(*) FILTER (WHERE direction = 'in')::int AS in,
             COUNT(*) FILTER (WHERE direction = 'out' AND status = 'delivered')::int AS delivered,
             COUNT(*) FILTER (WHERE direction = 'out' AND status IN ('sent', 'delivered', 'failed', 'expired'))::int AS finished
-     FROM sms_messages WHERE device_id = ANY($1) AND created_at >= $2`,
-    [ids, since]
+     FROM sms_messages WHERE device_id = ANY($1) AND created_at >= $2${simSql('sim_row_id', 3)}`,
+    [ids, since, sims]
   );
   const online = ids.filter((id) => isOnline(id)).length;
   return {

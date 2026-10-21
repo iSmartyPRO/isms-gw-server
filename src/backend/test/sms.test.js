@@ -180,3 +180,38 @@ test('sms knowledge base: guides use the portal host, never a hard-coded one', a
     assert.equal(pack.articles.length, 14);
   }
 });
+
+test('sms phone tokens: send and read, never change the phone, its SIMs, token or access', async () => {
+  const { phoneTokenPolicy } = await import('../modules/sms/apiTokens.js');
+  const { decide, effectivePolicy, limitsByTable } = await import('../api/scopes.js');
+  const policy = effectivePolicy(null, phoneTokenPolicy());
+  const ok = (method, path) => decide(policy, method, path).ok;
+  assert.ok(ok('POST', '/app/sms/messages'));
+  assert.ok(ok('GET', '/app/sms/messages'));
+  assert.ok(ok('GET', '/app/sms/messages/42'));
+  assert.ok(ok('POST', '/app/sms/messages/42/retry'));
+  assert.ok(ok('POST', '/app/sms/messages/42/cancel'));
+  assert.ok(ok('POST', '/app/sms/messages/read'));
+  assert.ok(ok('POST', '/app/sms/tools/segments'));
+  assert.ok(ok('GET', '/app/sms/devices'));
+  assert.ok(ok('GET', '/app/sms/threads'));
+  assert.ok(!ok('POST', '/app/sms/devices'));
+  assert.ok(!ok('PUT', '/app/sms/devices/3'));
+  assert.ok(!ok('DELETE', '/app/sms/devices/3'));
+  assert.ok(!ok('POST', '/app/sms/devices/3/token'));
+  assert.ok(!ok('PUT', '/app/sms/sims/7'));
+  assert.ok(!ok('GET', '/app/sms/devices/3/access'));
+  assert.ok(!ok('GET', '/app/sms/devices/3/events'));
+  assert.ok(!ok('GET', '/app/sms/devices/3/tokens'));
+  assert.ok(!ok('POST', '/app/sms/devices/3/tokens'));
+  assert.ok(!ok('GET', '/app/sms/subjects'));
+  assert.ok(!ok('GET', '/app/files/'));
+  assert.ok(!ok('GET', '/admin/users'));
+  assert.deepEqual([...limitsByTable({ 'sms.devices': [3], 'sms.sims': [7] }).sms_sims], [7]);
+});
+
+test('sms phone tokens: a SIM limit narrows what the service lets through', async () => {
+  const { simLimit } = await import('../modules/sms/service.js');
+  assert.equal(simLimit({ limits: null }), null);
+  assert.deepEqual(simLimit({ limits: { sms_sims: new Set([7, 9]) } }), [7, 9]);
+});

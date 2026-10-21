@@ -75,6 +75,25 @@ access, delete). The creator gets `manage` and always keeps it. `sms.admin` = ma
 narrows it. API tokens can be limited to phones (`RESOURCE_KINDS` → `sms.devices`). Templates: own + shared; only the
 author (or `sms.admin`) changes a shared one.
 
+## API tokens for one phone or SIM
+
+The quick way to give an integration access (`modules/sms/apiTokens.js`, UI `components/PhoneTokens.jsx`):
+**phone page → «API»** (or a SIM card → «API token for this SIM») → choose the SIM, expiry and IP addresses → the
+token is shown once with a developer guide (base URL, `deviceId`, `simId`, examples in cURL / Python / Node.js / PHP,
+a downloadable `.md` without the token).
+
+- It is a regular platform token (`pat_…`) of the person who makes it, so it also appears in their API console.
+- Scopes: area `sms` = `read`, plus allow rules for sending (`POST /app/sms/messages`, `…/cancel`, `…/retry`,
+  `…/read`, `/tools/**`) and deny rules for the access list, the journal, phone tokens and `/subjects`. It can never
+  change the phone, its SIM cards, the connection token or access (`phoneTokenPolicy()`, tested).
+- Resource limits: `sms.devices = [phone]` and, with a SIM, `sms.sims = [sim]`. A SIM limit (`simLimit(ctx)` in
+  `service.js`) makes the gateway send only through that SIM (without `simId` too), refuse another one
+  (`403 SIM_NOT_ALLOWED`) and show only that SIM and its messages (lists, threads, overview, export, mark-read).
+- Who: people with `manage` on the phone, while the module setting `phoneTokens` is on (default) and the API is on;
+  API tokens themselves cannot make or revoke them. The phone page lists tokens limited to the phone; a manager may
+  revoke a token that reaches only this phone, the owner or an administrator any.
+- The `sms.sims` limit is also available in the API console for hand-made tokens and webhooks.
+
 ## Webhooks and notifications
 
 Events (`api/events.js`, area `sms`): `sms.received`, `sms.sent`, `sms.delivered`, `sms.failed` (also for `expired`),
@@ -88,7 +107,7 @@ push by default) and `sms.deviceOffline` (managers, after `offlineAlertMinutes`)
 
 `modules/catalog.js` → `sms`: `defaultCountry` (KG), `userDevices`, `maxDevicesPerUser`, `ratePerMinute` (20),
 `queueTtlHours` (24), `ackTimeoutSec` (60), `maxAttempts` (3), `maxRecipients` (1000), `maxTextLength` (1600),
-`retentionDays` (365), `offlineAlertMinutes` (15). `defaultCountry`, `maxRecipients`, `userDevices`, `maxTextLength`
+`retentionDays` (365), `offlineAlertMinutes` (15), `phoneTokens` (true — phone managers make API tokens). `defaultCountry`, `maxRecipients`, `userDevices`, `maxTextLength`
 are public (the UI reads them).
 
 ## Deployment notes

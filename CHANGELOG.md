@@ -6,6 +6,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/); versions fol
 
 ### Added
 
+- SMS: API tokens for one phone or SIM right on the phone page (API tab, «API token for this SIM») with a developer guide and a downloadable `.md`; new token limit «SMS SIM cards» (`sms.sims`): sending only through those SIMs, reading only their messages; module setting `phoneTokens`.
 - SMS gateway module (`sms`): Android phones with iSMS GW connect over WebSocket (`/ws/device`); phones and SIM cards with labels, colours, daily limits and sharing; send queue with automatic routing, rate limits, retries, scheduling and expiry; two-way inbox, message history with CSV export, templates; REST API (`/api/v1/app/sms`), token limits by phone, webhooks `sms.*` / `device.*`, notifications; guides in the knowledge base; landing page in English, Russian and Turkish. See [docs/sms.md](docs/sms.md).
 
 ## [1.6.0] — 2026-10-19

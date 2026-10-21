@@ -50,6 +50,8 @@ export const MODULE_CATALOG = [
       retentionDays: 365,
       // Tell the owner when a phone has been offline this many minutes (0 = never).
       offlineAlertMinutes: 15,
+      // People who manage a phone make API tokens limited to it (and a SIM) on its page.
+      phoneTokens: true,
     },
     sanitize(current, incoming = {}) {
       const next = { ...current };
@@ -58,6 +60,7 @@ export const MODULE_CATALOG = [
         if (code === '' || /^[A-Z]{2}$/.test(code)) next.defaultCountry = code;
       }
       if (typeof incoming.userDevices === 'boolean') next.userDevices = incoming.userDevices;
+      if (typeof incoming.phoneTokens === 'boolean') next.phoneTokens = incoming.phoneTokens;
       if (incoming.maxDevicesPerUser !== undefined) next.maxDevicesPerUser = clampInt(incoming.maxDevicesPerUser, 1, 500, 20);
       if (incoming.ratePerMinute !== undefined) next.ratePerMinute = clampInt(incoming.ratePerMinute, 1, 120, 20);
       if (incoming.queueTtlHours !== undefined) next.queueTtlHours = clampInt(incoming.queueTtlHours, 1, 720, 24);

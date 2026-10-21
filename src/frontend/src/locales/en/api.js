@@ -191,6 +191,7 @@ export default {
     calendar_calendars: 'Calendars',
     files_spaces: 'File spaces',
     sms_devices: 'SMS phones',
+    sms_sims: "SMS SIM cards",
     crm_pipelines: 'CRM pipelines',
   },
   rules: {

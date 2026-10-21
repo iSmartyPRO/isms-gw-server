@@ -188,6 +188,33 @@ async function main() {
   const limited = await api('POST', '/messages', { to: ['+996555000010', '+996555000011'], text: 'Limit', simId: simRow.id });
   ok(limited.status === 409 && limited.code === 'SIM_LIMIT', `SIM limit enforced (${limited.code})`);
 
+  // An API token made on the phone page, pinned to SIM 1.
+  phone.autoAck = true;
+  const sim1 = online.sims.find((s) => s.simId === 11);
+  const sim2 = online.sims.find((s) => s.simId === 12);
+  const made = await api('POST', `/devices/${deviceId}/tokens`, { simId: sim1.id, expiresDays: 30 });
+  ok(made.status === 201 && /^pat_/.test(made.secret || ''), 'phone token created for one SIM');
+  const pat = async (method, path, body) => {
+    const res = await fetch(`${BASE}/api/v1/app/sms${path}`, { method, headers: { Authorization: `Bearer ${made.secret}`, ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined });
+    return { status: res.status, ...(await res.json().catch(() => ({}))) };
+  };
+  const viaToken = await pat('POST', '/messages', { to: '+996555111222', text: 'Via phone token' });
+  ok(viaToken.status === 201 && viaToken.messages?.[0]?.simId === sim1.id, 'token sends through its SIM without naming it');
+  ok((await pat('POST', '/messages', { to: '+996555111223', text: 'Other SIM', simId: sim2.id })).code === 'SIM_NOT_ALLOWED', 'token refuses another SIM');
+  const tokenDevices = await pat('GET', '/devices');
+  ok(tokenDevices.devices?.length === 1 && tokenDevices.devices[0].sims.length === 1, 'token sees one phone and one SIM');
+  const tokenMessages = await pat('GET', '/messages?limit=200');
+  ok(tokenMessages.messages?.every((m) => m.simId === sim1.id), 'token reads only messages of its SIM');
+  ok((await pat('PUT', `/devices/${deviceId}`, { name: 'Hacked' })).status === 403, 'token cannot change the phone');
+  ok((await pat('GET', `/devices/${deviceId}/access`)).status === 403, 'token cannot read the access list');
+  ok((await pat('POST', `/devices/${deviceId}/token`)).status === 403, 'token cannot replace the phone token');
+  ok((await pat('POST', `/devices/${deviceId}/tokens`, {})).status === 403, 'token cannot make tokens');
+  const listed = await api('GET', `/devices/${deviceId}/tokens`);
+  ok(listed.tokens?.[0]?.sim?.id === sim1.id && listed.tokens[0].state === 'active', 'phone page lists the token with its SIM');
+  await api('POST', `/devices/${deviceId}/tokens/${made.token.id}/revoke`);
+  await sleep(16000); // token lookups are cached for 15 s
+  ok((await pat('GET', '/devices')).status === 401, 'revoked token stops working');
+
   // Token rotation drops the connection.
   const closed = new Promise((resolve) => phone.ws.once('close', (code) => resolve(code)));
   const rotated = await api('POST', `/devices/${deviceId}/token`);

@@ -195,6 +195,7 @@ export default {
     calendar_calendars: 'Календари',
     files_spaces: 'Пространства файлов',
     sms_devices: 'Телефоны SMS-шлюза',
+    sms_sims: "SIM-карты SMS-шлюза",
     crm_pipelines: 'Воронки CRM',
   },
   rules: {

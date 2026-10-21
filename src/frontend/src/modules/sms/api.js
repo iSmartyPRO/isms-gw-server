@@ -19,6 +19,9 @@ export const smsApi = {
   access: (id) => api.get(`${base}/devices/${id}/access`),
   saveAccess: (id, entries) => api.put(`${base}/devices/${id}/access`, { entries }),
   subjects: () => api.get(`${base}/subjects`),
+  phoneTokens: (id) => api.get(`${base}/devices/${id}/tokens`),
+  createPhoneToken: (id, payload) => api.post(`${base}/devices/${id}/tokens`, payload),
+  revokePhoneToken: (id, tokenId) => api.post(`${base}/devices/${id}/tokens/${tokenId}/revoke`),
 
   updateSim: (id, payload) => api.put(`${base}/sims/${id}`, payload),
   deleteSim: (id) => api.delete(`${base}/sims/${id}`),

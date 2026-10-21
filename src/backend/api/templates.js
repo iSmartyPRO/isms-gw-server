@@ -97,6 +97,14 @@ export async function resourceOptions(req, { all = false } = {}) {
       ({ rows } = await query(`SELECT id, name, color FROM fs_spaces ORDER BY LOWER(name)`).catch(() => ({ rows: [] })));
       rows = rows.filter((row) => all || levels.of(row.id) > 0);
     }
+    if (kind.key === 'sms.sims') {
+      const visible = await levelMap('sms_device_acl', ctx);
+      ({ rows } = await query(
+        `SELECT s.id, s.device_id, d.name || ' · ' || COALESCE(NULLIF(s.label, ''), NULLIF(s.phone_label, ''), s.carrier, 'SIM ' || s.slot) AS name, COALESCE(s.color, s.phone_color) AS color
+         FROM sms_sims s JOIN sms_devices d ON d.id = s.device_id WHERE s.active ORDER BY LOWER(d.name), s.slot`
+      ).catch(() => ({ rows: [] })));
+      rows = rows.filter((row) => all || visible.of(row.device_id) > 0);
+    }
     if (kind.key === 'sms.devices') {
       ({ rows } = await query(`SELECT id, name, color FROM sms_devices ORDER BY LOWER(name)`).catch(() => ({ rows: [] })));
       rows = rows.filter((row) => all || levels.of(row.id) > 0);

@@ -37,4 +37,6 @@ export default {
   hours: 'sa',
   days: 'gün',
   perMinute: '/dk',
+  phoneTokens: "Telefon yöneticileri API belirteci oluşturur",
+  phoneTokensDesc: "Telefon sayfasında onu yönetenler, yalnızca o telefon (ve seçilen SIM) üzerinden gönderen ve okuyan belirteçler oluşturur. Kapalı — yalnızca API konsolundan.",
 };
