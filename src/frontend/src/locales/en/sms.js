@@ -460,6 +460,7 @@ export default {
     intro: "Tokens for your systems that send and read SMS only through this phone — or only one of its SIM cards. They act on your behalf and cannot change the phone, its settings or who has access.",
     create: "Create a token",
     empty: "No tokens for this phone yet.",
+    simGone: "SIM #{id} (no longer in the phone)",
     anySim: "Any SIM of this phone",
     morePhones_one: "+{count} more phone",
     morePhones_other: "+{count} more phones",

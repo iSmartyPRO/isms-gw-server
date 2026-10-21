@@ -215,3 +215,16 @@ test('sms phone tokens: a SIM limit narrows what the service lets through', asyn
   assert.equal(simLimit({ limits: null }), null);
   assert.deepEqual(simLimit({ limits: { sms_sims: new Set([7, 9]) } }), [7, 9]);
 });
+
+test('sms phone tokens: only tokens made on the phone page are listed and revoked there', async () => {
+  const { isPhoneToken, phoneTokenPolicy } = await import('../modules/sms/apiTokens.js');
+  const policy = phoneTokenPolicy();
+  const made = { template_id: null, scopes: policy.scopes, rules: policy.rules, limits: { 'sms.devices': [3], 'sms.sims': [7] } };
+  assert.equal(isPhoneToken(made), true);
+  assert.equal(isPhoneToken({ ...made, scopes: { sms: 'write' } }), false, 'wider scopes: a console token');
+  assert.equal(isPhoneToken({ ...made, scopes: { ...policy.scopes, crm: 'write' } }), false);
+  assert.equal(isPhoneToken({ ...made, template_id: 2 }), false);
+  assert.equal(isPhoneToken({ ...made, limits: { 'sms.devices': [3, 4] } }), false, 'reaches other phones');
+  assert.equal(isPhoneToken({ ...made, rules: [] }), false);
+  assert.equal(isPhoneToken({ ...made, limits: { 'sms.devices': [3], 'files.spaces': [1] } }), false);
+});

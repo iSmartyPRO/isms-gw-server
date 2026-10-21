@@ -17,10 +17,12 @@ const EXPIRY = [0, 30, 90, 180, 365];
 
 /** Code samples prefilled with the base URL, phone and SIM. The token stays a variable. */
 export function guideSamples({ base, deviceId, simId }) {
-  const body = simId ? `{"to": ["+996555123456"], "text": "Your code: 4821", "simId": ${simId}}` : `{"to": ["+996555123456"], "text": "Your code: 4821", "deviceId": ${deviceId}}`;
-  const pyBody = simId ? `{"to": ["+996555123456"], "text": "Your code: 4821", "simId": ${simId}}` : `{"to": ["+996555123456"], "text": "Your code: 4821", "deviceId": ${deviceId}}`;
-  const jsBody = simId ? `{ to: ['+996555123456'], text: 'Your code: 4821', simId: ${simId} }` : `{ to: ['+996555123456'], text: 'Your code: 4821', deviceId: ${deviceId} }`;
-  const phpBody = simId ? `['to' => ['+996555123456'], 'text' => 'Your code: 4821', 'simId' => ${simId}]` : `['to' => ['+996555123456'], 'text' => 'Your code: 4821', 'deviceId' => ${deviceId}]`;
+  // One payload, written in each language's syntax: the SIM when the token has one, else the phone.
+  const [key, value] = simId ? ['simId', simId] : ['deviceId', deviceId];
+  const body = `{"to": ["+996555123456"], "text": "Your code: 4821", "${key}": ${value}}`;
+  const pyBody = body;
+  const jsBody = `{ to: ['+996555123456'], text: 'Your code: 4821', ${key}: ${value} }`;
+  const phpBody = `['to' => ['+996555123456'], 'text' => 'Your code: 4821', '${key}' => ${value}]`;
   return {
     curl: `# Send
 curl -X POST ${base}/messages \\
@@ -215,8 +217,11 @@ function Guide({ device, sim, created }) {
   );
 }
 
-export function CreateTokenDialog({ open, device, presetSimId = null, onClose }) {
+export function CreateTokenDialog({ open, device, presetSimId = null, maxDays = 0, onClose }) {
   const { t } = useLocale();
+  // The API console's longest lifetime: longer choices and «no expiry» are not offered.
+  const choices = EXPIRY.filter((days) => (maxDays ? days && days <= maxDays : true)).concat(maxDays && !EXPIRY.includes(maxDays) ? [maxDays] : []).sort((a, b) => (a || Infinity) - (b || Infinity));
+  const defaultDays = choices.includes(365) ? 365 : choices[choices.length - 1];
   const { message } = App.useApp();
   const [form] = Form.useForm();
   const [simId, setSimId] = useState(null);
@@ -296,13 +301,13 @@ export function CreateTokenDialog({ open, device, presetSimId = null, onClose })
             </div>
             <p className="sx-hint">{simId ? t('sms.tokens.simOnlyHint') : t('sms.tokens.anySimHint')}</p>
           </div>
-          <Form form={form} layout="vertical" requiredMark={false} initialValues={{ expiresDays: 365 }}>
+          <Form form={form} layout="vertical" requiredMark={false} initialValues={{ expiresDays: defaultDays }}>
             <Form.Item name="name" label={t('sms.tokens.name')} extra={t('sms.tokens.nameHint')}>
               <Input maxLength={120} placeholder={`SMS · ${device.name}${sim ? ` · ${sim.label || sim.phoneLabel || sim.carrier || `SIM ${sim.slot}`}` : ''}`} />
             </Form.Item>
             <div className="form-grid-2">
               <Form.Item name="expiresDays" label={t('sms.tokens.expires')}>
-                <Select options={EXPIRY.map((days) => ({ value: days, label: days ? t('sms.tokens.days', { count: days }) : t('sms.tokens.never') }))} />
+                <Select options={choices.map((days) => ({ value: days, label: days ? t('sms.tokens.days', { count: days }) : t('sms.tokens.never') }))} />
               </Form.Item>
               <Form.Item name="ipAllow" label={t('sms.tokens.ipAllow')} extra={t('sms.tokens.ipAllowHint')}>
                 <Input placeholder="203.0.113.10, 10.0.0.0/8" />
@@ -316,7 +321,7 @@ export function CreateTokenDialog({ open, device, presetSimId = null, onClose })
 }
 
 /** The «API» tab of a phone. */
-export default function PhoneTokens({ device, presetSimId = null, onPresetUsed }) {
+export default function PhoneTokens({ device, presetSimId = null, maxDays = 0, onPresetUsed }) {
   const { t, locale } = useLocale();
   const { message, modal } = App.useApp();
   const [tokens, setTokens] = useState(null);
@@ -376,7 +381,10 @@ export default function PhoneTokens({ device, presetSimId = null, onPresetUsed }
               <div className="sx-token__main">
                 <strong>{token.name}</strong>
                 <span className="sx-muted">
-                  <code>{token.prefix}_…</code> · {token.sim ? `${token.sim.name}${token.sim.number ? ` ${token.sim.number}` : ''}` : t('sms.tokens.anySim')}
+                  <code>{token.prefix}_…</code> ·{' '}
+                  {token.sims?.length
+                    ? token.sims.map((sim) => (sim.gone ? t('sms.tokens.simGone', { id: sim.id }) : `${sim.name}${sim.number ? ` ${sim.number}` : ''}`)).join(', ')
+                    : t('sms.tokens.anySim')}
                   {token.phonesCount > 1 ? ` · ${t('sms.tokens.morePhones', { count: token.phonesCount - 1 })}` : ''}
                   {!token.mine ? ` · ${token.owner.name}` : ''}
                 </span>
@@ -408,6 +416,7 @@ export default function PhoneTokens({ device, presetSimId = null, onPresetUsed }
         open={creating}
         device={device}
         presetSimId={presetSimId}
+        maxDays={maxDays}
         onClose={(made) => {
           setCreating(false);
           onPresetUsed?.();

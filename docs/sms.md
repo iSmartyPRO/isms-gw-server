@@ -89,9 +89,14 @@ a downloadable `.md` without the token).
 - Resource limits: `sms.devices = [phone]` and, with a SIM, `sms.sims = [sim]`. A SIM limit (`simLimit(ctx)` in
   `service.js`) makes the gateway send only through that SIM (without `simId` too), refuse another one
   (`403 SIM_NOT_ALLOWED`) and show only that SIM and its messages (lists, threads, overview, export, mark-read).
-- Who: people with `manage` on the phone, while the module setting `phoneTokens` is on (default) and the API is on;
-  API tokens themselves cannot make or revoke them. The phone page lists tokens limited to the phone; a manager may
-  revoke a token that reaches only this phone, the owner or an administrator any.
+- Who: people with `manage` on the phone while the API is on and both the module setting `phoneTokens` (default on)
+  and the API console's «personal tokens» are on; `sms.admin` always. The lifetime follows the console's longest
+  lifetime. API tokens themselves cannot list, make or revoke them.
+- The phone page lists and revokes only tokens made there (`isPhoneToken()`: exactly this policy, one phone);
+  console tokens stay in the console. Where a colleague's token is used from (IP, allow-list) is shown only to its
+  owner and administrators.
+- Webhooks narrowed to SIM cards get message events of those SIMs only; device counters of a SIM-narrowed token
+  count its SIMs only.
 - The `sms.sims` limit is also available in the API console for hand-made tokens and webhooks.
 
 ## Webhooks and notifications

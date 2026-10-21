@@ -150,10 +150,32 @@ export async function visibleDeviceIds(ctx, minLevel = LEVEL.view) {
   return rows.map((row) => row.id).filter((id) => levels.of(id) >= minLevel);
 }
 
+/**
+ * A token narrowed to SIM cards sees the phone's counters of those SIMs only
+ * (the phone-wide ones would tell it about traffic of the others).
+ */
+async function narrowCounters(ctx, rows) {
+  const sims = simLimit(ctx);
+  if (!sims || !rows.length) return rows;
+  const { rows: counts } = await query(
+    `SELECT device_id,
+       COUNT(*) FILTER (WHERE direction = 'out' AND status IN ('sent', 'delivered') AND created_at >= $3) AS sent_today,
+       COUNT(*) FILTER (WHERE direction = 'in' AND created_at >= $3) AS received_today,
+       COUNT(*) FILTER (WHERE direction = 'out' AND status = 'failed' AND created_at >= $3) AS failed_today,
+       COUNT(*) FILTER (WHERE status IN ('queued', 'scheduled', 'dispatched')) AS queued
+     FROM sms_messages WHERE device_id = ANY($1) AND sim_row_id = ANY($2) GROUP BY device_id`,
+    [rows.map((row) => row.id), sims, (await portalDay()).today]
+  );
+  const byDevice = new Map(counts.map((row) => [row.device_id, row]));
+  const zero = { sent_today: 0, received_today: 0, failed_today: 0, queued: 0 };
+  return rows.map((row) => ({ ...row, ...zero, ...(byDevice.get(row.id) ? { sent_today: byDevice.get(row.id).sent_today, received_today: byDevice.get(row.id).received_today, failed_today: byDevice.get(row.id).failed_today, queued: byDevice.get(row.id).queued } : {}) }));
+}
+
 export async function listDevices(ctx) {
   const items = await visibleDevices(ctx);
   const sims = await simsOf(items.map((item) => item.row.id), ctx);
-  return items.map(({ row, level }) => deviceShape(row, level, sims.get(row.id) || []));
+  const rows = await narrowCounters(ctx, items.map((item) => item.row));
+  return items.map(({ level }, index) => deviceShape(rows[index], level, sims.get(rows[index].id) || []));
 }
 
 async function deviceRow(id) {
@@ -174,7 +196,8 @@ async function loadDevice(ctx, id, needed = LEVEL.view) {
 export async function getDevice(ctx, id) {
   const { row, level } = await loadDevice(ctx, id);
   const sims = await simsOf([row.id], ctx);
-  return deviceShape(row, level, sims.get(row.id) || []);
+  const [narrowed] = await narrowCounters(ctx, [row]);
+  return deviceShape(narrowed, level, sims.get(row.id) || []);
 }
 
 function deviceInput(input, current = {}) {
@@ -572,7 +595,7 @@ export async function getThread(ctx, { deviceId, phone, before, limit } = {}) {
   }
   if (before) {
     args.push(Number(before) || 0);
-    beforeSql = ` AND m.id < $${args.length}`;
+    beforeSql += ` AND m.id < $${args.length}`;
   }
   const size = clampInt(limit, 1, 200, 80);
   const { rows } = await query(`${MESSAGE_SELECT} WHERE m.device_id = $1 AND m.phone = $2 ${beforeSql} ORDER BY m.id DESC LIMIT ${size + 1}`, args);

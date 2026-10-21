@@ -3,7 +3,7 @@ import { contextFromRequest, wrap } from '../shared/acl.js';
 import { smsSegments, parseRecipients } from './phone.js';
 import { onlineIds } from './hub.js';
 import * as sms from './service.js';
-import { createPhoneToken, listPhoneTokens, phoneTokensAllowed, revokePhoneToken } from './apiTokens.js';
+import { createPhoneToken, listPhoneTokens, maxTokenDays, phoneTokensAllowed, revokePhoneToken } from './apiTokens.js';
 import { listSubjects } from '../kb/service.js';
 
 const ctxOf = (req) => contextFromRequest(req, 'sms.admin');
@@ -38,6 +38,7 @@ export function privateRoutes() {
         maxTextLength: settings.maxTextLength,
         canAddDevices: Boolean(settings.userDevices || ctx.isAdmin),
         canCreateTokens: !req.apiToken && (await phoneTokensAllowed(ctx)),
+        maxTokenDays: await maxTokenDays(),
         isAdmin: ctx.isAdmin,
         devicePath: '/ws/device',
         online: ctx.isAdmin ? onlineIds().length : undefined,
@@ -87,7 +88,7 @@ export function privateRoutes() {
 
   // API tokens limited to this phone (and a SIM), made by its managers.
   router.get('/devices/:id/tokens', wrap(async (req, res) => {
-    res.json({ success: true, tokens: await listPhoneTokens(ctxOf(req), req.params.id) });
+    res.json({ success: true, tokens: await listPhoneTokens(ctxOf(req), req, req.params.id) });
   }));
   router.post('/devices/:id/tokens', wrap(async (req, res) => {
     res.status(201).json({ success: true, ...(await createPhoneToken(ctxOf(req), req, req.params.id, req.body || {})) });

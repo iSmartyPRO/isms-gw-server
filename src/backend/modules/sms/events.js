@@ -48,7 +48,12 @@ export function messageShape(row) {
   };
 }
 
-const canSeeDevice = (deviceId) => async (req) => (await levelOn(ACL, deviceId, contextFromRequest(req, 'sms.admin'))) >= LEVEL.view;
+/** May the webhook's person see this phone (and, for a message, its SIM when the webhook is narrowed to SIM cards)? */
+const canSeeDevice = (deviceId, simRowId = undefined) => async (req) => {
+  const sims = req.apiLimits?.sms_sims;
+  if (sims && simRowId !== undefined && !sims.has(Number(simRowId))) return false;
+  return (await levelOn(ACL, deviceId, contextFromRequest(req, 'sms.admin'))) >= LEVEL.view;
+};
 
 const EVENT_OF_STATUS = { sent: 'sms.sent', delivered: 'sms.delivered', failed: 'sms.failed', expired: 'sms.failed', received: 'sms.received' };
 
@@ -56,7 +61,7 @@ const EVENT_OF_STATUS = { sent: 'sms.sent', delivered: 'sms.delivered', failed: 
 export async function emitMessage(row) {
   const type = EVENT_OF_STATUS[row?.status];
   if (!type || !row.device_id) return;
-  await emitEvent(type, { data: { message: messageShape(row) }, visible: canSeeDevice(row.device_id) });
+  await emitEvent(type, { data: { message: messageShape(row) }, visible: canSeeDevice(row.device_id, row.sim_row_id) });
 }
 
 export async function emitDevice(type, device) {

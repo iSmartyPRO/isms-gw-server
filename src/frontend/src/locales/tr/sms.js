@@ -460,6 +460,7 @@ export default {
     intro: "Sistemleriniz için yalnızca bu telefon — ya da yalnızca bir SIM’i — üzerinden SMS gönderen ve okuyan belirteçler. Sizin adınıza çalışır; telefonu, ayarlarını ve erişimi değiştiremez.",
     create: "Belirteç oluştur",
     empty: "Bu telefon için henüz belirteç yok.",
+    simGone: "SIM #{id} (artık telefonda değil)",
     anySim: "Bu telefonun herhangi bir SIM’i",
     morePhones_one: "+{count} telefon daha",
     morePhones_other: "+{count} telefon daha",

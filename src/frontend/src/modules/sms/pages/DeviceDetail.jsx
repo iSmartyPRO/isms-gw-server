@@ -439,7 +439,7 @@ export default function DeviceDetail() {
             config?.canCreateTokens && {
               key: 'api',
               label: t('sms.device.tabs.api'),
-              children: <PhoneTokens device={device} presetSimId={tokenSim} onPresetUsed={() => setTokenSim(null)} />,
+              children: <PhoneTokens device={device} presetSimId={tokenSim} maxDays={config?.maxTokenDays || 0} onPresetUsed={() => setTokenSim(null)} />,
             },
           {
             key: 'journal',
