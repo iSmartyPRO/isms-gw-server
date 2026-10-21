@@ -21,8 +21,13 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: src/backend/package-lock.json
+          cache-dependency-path: |
+            src/backend/package-lock.json
+            src/frontend/package-lock.json
       - run: npm ci --no-audit --no-fund
+      # Some backend tests import shared frontend modules (i18n, readme rendering).
+      - run: npm ci --no-audit --no-fund
+        working-directory: src/frontend
       - run: npm run check
       - run: npm test
 
